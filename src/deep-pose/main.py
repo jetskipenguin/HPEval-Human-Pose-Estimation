@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 import torchvision.models as models
 from torchvision import transforms
-from .config import get_configuration
+from configuration.config import get_configuration
 
 import os
 import json
