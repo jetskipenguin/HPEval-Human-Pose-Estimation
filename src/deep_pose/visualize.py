@@ -99,3 +99,6 @@ def main():
         
         # --- Run Prediction ---
         predict_on_image(model, args.image_path, device)
+
+if __name__ == "__main__":
+    main()
