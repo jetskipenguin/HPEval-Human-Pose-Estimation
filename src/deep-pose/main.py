@@ -13,6 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 import torchvision.models as models
 from torchvision import transforms
+import configparser
+import argparse
 
 import os
 import json
@@ -257,21 +259,34 @@ def evaluate(model, dataloader, device, coco_gt):
     return ap
 
 
-def main():
-    # --- Configuration ---
-    # !!! IMPORTANT !!!
-    # UPDATE THESE PATHS TO YOUR COCO DATASET LOCATION
-    TRAIN_IMG_DIR = '/work/vba875/coco/images/train2017'
-    TRAIN_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_train2017.json'
-    VAL_IMG_DIR = '/work/vba875/coco/images/val2017'
-    VAL_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_val2017.json'
+def get_configuration():
+    parser = argparse.ArgumentParser(description="Resnet DeepPose Training")
+    parser.add_argument('--config_path', type=str, required=True,
+                        help="Path to the .ini file with file path configurations")
+    args = parser.parse_args()
+    config = configparser.ConfigParser(args.config_path)
+
+    required_config_params = {'TRAIN_IMG_DIR', 'TRAIN_ANN_FILE', 'VAL_IMG_DIR', 'VAL_ANN_FILE'}
+    if required_config_params not in set(config.options("DeepPose")):
+        print("="*50)
+        print("ERROR: One or more required config options not present in config file")
+        print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set")
+        print("="*50)
+        exit(1)
+
+    for file_path in required_config_params:
+        if not os.path.exists(file_path):
+            print("="*50)
+            print("ERROR: Dataset path not found")
+            print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set correctly in specified config.ini file")
+            print("="*50)
+            exit(1)
     
-    if not os.path.exists(TRAIN_IMG_DIR) or not os.path.exists(VAL_IMG_DIR):
-        print("="*50)
-        print("!!! ERROR: Dataset paths not found. !!!")
-        print("Please update TRAIN_IMG_DIR and VAL_IMG_DIR in the main() function.")
-        print("="*50)
-        return
+    return config.get("DeepPose", "TRAIN_IMG_DIR"), config.get("DeepPose", "TRAIN_ANN_FILE"), config.get("DeepPose", "VAL_IMG_DIR"), config.get("DeepPose", 'VAL_ANN_FILE')
+
+
+def main():
+    TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE = get_configuration()
 
     NUM_EPOCHS = 20
     BATCH_SIZE = 32
