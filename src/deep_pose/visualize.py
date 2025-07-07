@@ -74,7 +74,7 @@ def predict_on_image(model, image_path, device, target_size=224):
     pred_keypoints[:, 1] = (pred_keypoints[:, 1] - pad_y) / scale
     
     # Use the original BGR image for OpenCV drawing
-    visualize_pose(image, pred_keypoints)
+    visualize_pose(image, pred_keypoints, f"estimated_pose_{image_path.split(os.sep)[-1]}")
 
 def main():
     parser = argparse.ArgumentParser(description="DeepPose Training and Prediction")
