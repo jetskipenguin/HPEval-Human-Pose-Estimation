@@ -267,7 +267,7 @@ def get_configuration():
     config = configparser.ConfigParser()
     config.read(args.config_path)
 
-    required_config_params = {'TRAIN_IMG_DIR', 'TRAIN_ANN_FILE', 'VAL_IMG_DIR', 'VAL_ANN_FILE'}
+    required_config_params = {'train_img_dir', 'train_ann_file', 'val_img_dir', 'val_ann_file'}
     if required_config_params not in set(config.options("DeepPose")):
         print("="*50)
         print("ERROR: One or more required config options not present in config file")
@@ -283,7 +283,7 @@ def get_configuration():
             print("="*50)
             exit(1)
     
-    return config.get("DeepPose", "TRAIN_IMG_DIR"), config.get("DeepPose", "TRAIN_ANN_FILE"), config.get("DeepPose", "VAL_IMG_DIR"), config.get("DeepPose", 'VAL_ANN_FILE')
+    return config.get("DeepPose", "train_img_dir"), config.get("DeepPose", "train_ann_file"), config.get("DeepPose", "val_img_dir"), config.get("DeepPose", 'val_ann_file')
 
 
 def main():
