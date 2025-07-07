@@ -244,10 +244,10 @@ def main():
     # --- Configuration ---
     # !!! IMPORTANT !!!
     # UPDATE THESE PATHS TO YOUR COCO DATASET LOCATION
-    TRAIN_IMG_DIR = '/path/to/your/coco/train2017'
-    TRAIN_ANN_FILE = '/path/to/your/coco/annotations/person_keypoints_train2017.json'
-    VAL_IMG_DIR = '/path/to/your/coco/val2017'
-    VAL_ANN_FILE = '/path/to/your/coco/annotations/person_keypoints_val2017.json'
+    TRAIN_IMG_DIR = '/work/vba875/coco/images/train2017'
+    TRAIN_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_train2017.json'
+    VAL_IMG_DIR = '/work/vba875/coco/images/val2017'
+    VAL_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_val2017.json'
     
     # Check if paths exist
     if not os.path.exists(TRAIN_IMG_DIR) or not os.path.exists(VAL_IMG_DIR):
