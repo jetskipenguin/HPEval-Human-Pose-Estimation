@@ -264,7 +264,8 @@ def get_configuration():
     parser.add_argument('--config_path', type=str, required=True,
                         help="Path to the .ini file with file path configurations")
     args = parser.parse_args()
-    config = configparser.ConfigParser(args.config_path)
+    config = configparser.ConfigParser()
+    config.read(args.config_path)
 
     required_config_params = {'TRAIN_IMG_DIR', 'TRAIN_ANN_FILE', 'VAL_IMG_DIR', 'VAL_ANN_FILE'}
     if required_config_params not in set(config.options("DeepPose")):
