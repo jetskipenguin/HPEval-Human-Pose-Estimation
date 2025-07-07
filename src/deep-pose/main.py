@@ -307,23 +307,6 @@ def main():
     print("\n--- Training Finished ---")
     print(f"Best Validation AP: {best_ap:.4f}")
 
-    # --- Visualization ---
-    print("\n--- Running Visualization ---")
-    # Load the best model for visualization
-    vis_model = DeepPose(num_keypoints=17).to(device)
-    vis_model.load_state_dict(torch.load("deeppose_best.pth"))
-
-    # !!! IMPORTANT !!!
-    # Set this variable to the path of an image you want to test.
-    # For example: image_to_visualize = 'path/to/your/image.jpg'
-    image_to_visualize = None 
-
-    if image_to_visualize and os.path.exists(image_to_visualize):
-        visualize(vis_model, image_to_visualize, device)
-    else:
-        print("\nTo visualize, please set the 'image_to_visualize' variable")
-        print("in the main() function to a valid image path.")
-
 
 if __name__ == '__main__':
     main()
