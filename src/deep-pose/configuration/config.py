@@ -18,8 +18,8 @@ def get_configuration():
             print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set")
             exit(1)
 
-    for file_path in required_config_params:
-        if not os.path.exists(file_path):
+    for param in required_config_params:
+        if not os.path.exists(config.get("DeepPose", param)):
             print("ERROR: Dataset path not found")
             print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set to the correct directories in the config file")
             exit(1)
