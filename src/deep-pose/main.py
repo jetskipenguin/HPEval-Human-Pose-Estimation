@@ -13,8 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 import torchvision.models as models
 from torchvision import transforms
-import configparser
-import argparse
+from .config import get_configuration
 
 import os
 import json
@@ -257,33 +256,6 @@ def evaluate(model, dataloader, device, coco_gt):
     os.remove(res_file)
     
     return ap
-
-
-def get_configuration():
-    parser = argparse.ArgumentParser(description="Resnet DeepPose Training")
-    parser.add_argument('--config_path', type=str, required=True,
-                        help="Path to the .ini file with file path configurations")
-    args = parser.parse_args()
-    config = configparser.ConfigParser()
-    config.read(args.config_path)
-
-    required_config_params = {'train_img_dir', 'train_ann_file', 'val_img_dir', 'val_ann_file'}
-    if required_config_params not in set(config.options("DeepPose")):
-        print("="*50)
-        print("ERROR: One or more required config options not present in config file")
-        print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set")
-        print("="*50)
-        exit(1)
-
-    for file_path in required_config_params:
-        if not os.path.exists(file_path):
-            print("="*50)
-            print("ERROR: Dataset path not found")
-            print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set correctly in specified config.ini file")
-            print("="*50)
-            exit(1)
-    
-    return config.get("DeepPose", "train_img_dir"), config.get("DeepPose", "train_ann_file"), config.get("DeepPose", "val_img_dir"), config.get("DeepPose", 'val_ann_file')
 
 
 def main():
