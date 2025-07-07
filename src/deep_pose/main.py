@@ -11,7 +11,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
-import torchvision.models as models
 from torchvision import transforms
 from configuration.config import get_configuration
 
@@ -21,24 +20,8 @@ import cv2
 import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
+from model.DeepPose import DeepPose
 
-class DeepPose(nn.Module):
-    """
-    DeepPose model for human pose estimation.
-    Uses a pre-trained ResNet as a backbone to extract features,
-    and a fully connected layer to regress keypoint coordinates.
-    """
-    def __init__(self, num_keypoints=17):
-        super(DeepPose, self).__init__()
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.backbone = nn.Sequential(*list(resnet.children())[:-1])
-        self.fc = nn.Linear(2048, num_keypoints * 2)
-
-    def forward(self, x):
-        x = self.backbone(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
 
 class CocoPoseDataset(Dataset):
     """

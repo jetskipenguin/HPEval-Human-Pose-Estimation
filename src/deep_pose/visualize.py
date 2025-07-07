@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import argparse
 import os
-from .main import DeepPose
+from model.DeepPose import DeepPose
 
 def visualize_pose(image, keypoints, output_path="output_skeleton.jpg"):
     """
