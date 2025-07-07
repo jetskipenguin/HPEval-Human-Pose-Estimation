@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.dataloader import default_collate
 import torchvision.models as models
 from torchvision import transforms
 
@@ -20,7 +21,6 @@ import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-
 class DeepPose(nn.Module):
     """
     DeepPose model for human pose estimation.
@@ -28,103 +28,61 @@ class DeepPose(nn.Module):
     and a fully connected layer to regress keypoint coordinates.
     """
     def __init__(self, num_keypoints=17):
-        """
-        Initializes the DeepPose model.
-        Args:
-            num_keypoints (int): The number of keypoints to predict (17 for COCO).
-        """
         super(DeepPose, self).__init__()
-        
-        # Load a pre-trained ResNet-50 model
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        
-        # We use all layers of ResNet except for the final classification layer (fc)
-        # The output of the layer before fc is a 2048-dimensional feature vector.
         self.backbone = nn.Sequential(*list(resnet.children())[:-1])
-        
-        # Define the regression head
-        # It takes the 2048-D feature vector and outputs 2 coordinates (x, y) for each keypoint.
         self.fc = nn.Linear(2048, num_keypoints * 2)
 
     def forward(self, x):
-        """
-        Forward pass through the model.
-        Args:
-            x (torch.Tensor): The input image tensor.
-        Returns:
-            torch.Tensor: The predicted keypoint coordinates (batch_size, num_keypoints * 2).
-        """
         x = self.backbone(x)
-        x = x.view(x.size(0), -1)  # Flatten the features
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
-
 
 class CocoPoseDataset(Dataset):
     """
     Custom PyTorch Dataset for the MS COCO Keypoints dataset.
+    Generates one sample per person annotation.
     """
     def __init__(self, root_dir, annotation_file, transform=None, target_size=224):
-        """
-        Args:
-            root_dir (string): Directory with all the images.
-            annotation_file (string): Path to the COCO annotation file.
-            transform (callable, optional): Optional transform to be applied on a sample.
-            target_size (int): The size of the final square image.
-        """
         self.root_dir = root_dir
         self.coco = COCO(annotation_file)
         self.transform = transform
         self.target_size = target_size
         
-        # Filter for images that contain people with keypoints
-        self.ids = self._get_image_ids()
+        # *** FIX: Create a list of all valid annotations (one per person) ***
+        self.ann_ids = self._get_ann_ids()
 
-    def _get_image_ids(self):
+    def _get_ann_ids(self):
         """
-        Returns a list of image IDs that contain at least one person with keypoints.
+        Returns a list of annotation IDs for people with at least one keypoint.
         """
-        ids = []
+        ann_ids = []
         cat_ids = self.coco.getCatIds(catNms=['person'])
-        for img_id in self.coco.getImgIds():
-            ann_ids = self.coco.getAnnIds(imgIds=img_id, catIds=cat_ids, iscrowd=False)
-            if ann_ids:
-                anns = self.coco.loadAnns(ann_ids)
-                if any(ann['num_keypoints'] > 0 for ann in anns):
-                    ids.append(img_id)
-        return ids
+        img_ids = self.coco.getImgIds(catIds=cat_ids)
+        for img_id in img_ids:
+            anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=img_id, catIds=cat_ids, iscrowd=False))
+            for ann in anns:
+                if ann['num_keypoints'] > 0:
+                    ann_ids.append(ann['id'])
+        return ann_ids
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.ann_ids)
 
     def __getitem__(self, idx):
-        """
-        Retrieves an image and its corresponding keypoint annotations.
-        Handles resizing and padding to preserve aspect ratio.
-        """
-        img_id = self.ids[idx]
-        img_info = self.coco.loadImgs(img_id)[0]
+        ann_id = self.ann_ids[idx]
+        ann = self.coco.loadAnns(ann_id)[0]
+        img_info = self.coco.loadImgs(ann['image_id'])[0]
         img_path = os.path.join(self.root_dir, img_info['file_name'])
         
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        ann_ids = self.coco.getAnnIds(imgIds=img_id, catIds=self.coco.getCatIds(catNms=['person']))
-        anns = self.coco.loadAnns(ann_ids)
-        
-        largest_person_ann = None
-        max_area = 0
-        for ann in anns:
-            if ann['num_keypoints'] > 0 and ann['area'] > max_area:
-                max_area = ann['area']
-                largest_person_ann = ann
-        
-        if largest_person_ann is None:
-            return self.__getitem__((idx + 1) % len(self))
-            
-        bbox = largest_person_ann['bbox']
+        bbox = ann['bbox']
         x, y, w, h = [int(v) for v in bbox]
         
+        # --- Cropping and Resizing ---
         padding = 30
         x1 = max(0, x - padding)
         y1 = max(0, y - padding)
@@ -139,30 +97,37 @@ class CocoPoseDataset(Dataset):
         pad_x, pad_y = (self.target_size - new_w) // 2, (self.target_size - new_h) // 2
 
         resized_image = cv2.resize(cropped_image, (new_w, new_h))
-        padded_image = np.zeros((self.target_size, self.target_size, 3), dtype=np.uint8)
+        padded_image = np.full((self.target_size, self.target_size, 3), 128, dtype=np.uint8) # Pad with grey
         padded_image[pad_y:pad_y+new_h, pad_x:pad_x+new_w] = resized_image
 
-        keypoints = np.array(largest_person_ann['keypoints']).reshape(-1, 3)
-        
-        # Adjust keypoints for the crop, resize, and padding
+        # --- Keypoint Transformation ---
+        keypoints = np.array(ann['keypoints']).reshape(-1, 3)
         keypoints_transformed = np.zeros_like(keypoints, dtype=np.float32)
-        keypoints_transformed[:, 0] = (keypoints[:, 0] - x1) * scale + pad_x
-        keypoints_transformed[:, 1] = (keypoints[:, 1] - y1) * scale + pad_y
         
-        # Normalize keypoints to be in the range [0, 1]
-        keypoints_transformed[:, 0] /= self.target_size
-        keypoints_transformed[:, 1] /= self.target_size
+        # *** FIX: Process keypoints and visibility flags correctly ***
+        visible_keypoints_mask = keypoints[:, 2] > 0
         
+        # Adjust keypoints for crop, resize, and padding
+        kpts_temp = keypoints[visible_keypoints_mask, :2].copy()
+        kpts_temp[:, 0] = (kpts_temp[:, 0] - x1) * scale + pad_x
+        kpts_temp[:, 1] = (kpts_temp[:, 1] - y1) * scale + pad_y
+
+        keypoints_transformed[visible_keypoints_mask, :2] = kpts_temp
+        
+        # Store visibility
+        visibility = keypoints[:, 2] 
+        
+        # *** FIX: Regress to pixel coordinates, not normalized values ***
         keypoints_final = keypoints_transformed[:, :2].flatten()
         
         sample = {
             'image': padded_image, 
-            'keypoints': keypoints_final, 
-            'meta': {
-                'img_id': img_id, 
-                'ann_id': largest_person_ann['id'],
+            'keypoints': torch.from_numpy(keypoints_final).float(),
+            'visibility': torch.from_numpy(visibility).float(),
+            'meta': { # Meta data should not be tensors
+                'img_id': ann['image_id'], 
+                'ann_id': ann_id,
                 'crop_box': [x1, y1, x2, y2],
-                'crop_dims': [crop_w, crop_h],
                 'scale': scale,
                 'pad': [pad_x, pad_y]
             }
@@ -173,17 +138,47 @@ class CocoPoseDataset(Dataset):
             
         return sample
 
+def keypoint_loss(outputs, targets, visibility):
+    """
+    Custom loss function that only calculates MSE for visible keypoints.
+    """
+    loss = 0
+    # Reshape for easier processing
+    outputs = outputs.view(-1, 17, 2)
+    targets = targets.view(-1, 17, 2)
+    visibility = visibility.view(-1, 17)
+    
+    for i in range(outputs.size(0)): # Iterate over batch
+        # *** FIX: Only compute loss for visible keypoints (v=1 or v=2) ***
+        vis_mask = visibility[i] > 0
+        if vis_mask.sum() > 0:
+            loss += nn.functional.mse_loss(outputs[i][vis_mask], targets[i][vis_mask])
+            
+    return loss / outputs.size(0)
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device):
+# *** FIX: Custom collate function to handle metadata ***
+def custom_collate_fn(batch):
+    # Separate metadata from tensor data
+    meta_batch = [item.pop('meta') for item in batch]
+    # Use default collate for the rest
+    collated_batch = default_collate(batch)
+    collated_batch['meta'] = meta_batch
+    return collated_batch
+    
+def train_one_epoch(model, dataloader, optimizer, device):
     model.train()
     running_loss = 0.0
     for i, batch in enumerate(dataloader):
         images = batch['image'].to(device)
-        keypoints = batch['keypoints'].to(device).float()
+        keypoints = batch['keypoints'].to(device)
+        visibility = batch['visibility'].to(device)
         
         optimizer.zero_grad()
         outputs = model(images)
-        loss = criterion(outputs, keypoints)
+        # *** FIX: Use custom loss function ***
+        loss = keypoint_loss(outputs, keypoints, visibility)
+        if loss == 0: continue # Skip batches with no visible keypoints
+        
         loss.backward()
         optimizer.step()
         
@@ -202,7 +197,8 @@ def evaluate(model, dataloader, device, coco_gt):
     with torch.no_grad():
         for batch in dataloader:
             images = batch['image'].to(device)
-            metas = batch['meta']
+            # *** FIX: Access meta correctly from the custom collate function output ***
+            metas = batch['meta'] 
             
             outputs = model(images)
             outputs = outputs.cpu().numpy()
@@ -210,25 +206,22 @@ def evaluate(model, dataloader, device, coco_gt):
             for i in range(outputs.shape[0]):
                 pred_keypoints = outputs[i].reshape(-1, 2)
                 
-                scale = metas['scale'][i].item()
-                pad_x = metas['pad'][0][i].item()
-                pad_y = metas['pad'][1][i].item()
-                crop_x1 = metas['crop_box'][0][i].item()
-                crop_y1 = metas['crop_box'][1][i].item()
+                # Get metadata for the current sample
+                meta = metas[i]
+                scale = meta['scale']
+                pad_x, pad_y = meta['pad']
+                crop_x1, crop_y1, _, _ = meta['crop_box']
 
-                # 1. Reverse normalization (from [0,1] to target_size space)
-                pred_keypoints[:, 0] *= target_size
-                pred_keypoints[:, 1] *= target_size
-                
-                # 2. Reverse padding
+                # --- Reverse Transformations ---
+                # 1. Reverse padding
                 pred_keypoints[:, 0] -= pad_x
                 pred_keypoints[:, 1] -= pad_y
                 
-                # 3. Reverse scaling
+                # 2. Reverse scaling
                 pred_keypoints[:, 0] /= scale
                 pred_keypoints[:, 1] /= scale
                 
-                # 4. Add original crop offset
+                # 3. Add original crop offset
                 pred_keypoints[:, 0] += crop_x1
                 pred_keypoints[:, 1] += crop_y1
                 
@@ -236,10 +229,10 @@ def evaluate(model, dataloader, device, coco_gt):
                 keypoints_with_confidence[:, :2] = pred_keypoints
                 
                 result = {
-                    "image_id": metas['img_id'][i].item(),
-                    "category_id": 1,
+                    "image_id": meta['img_id'],
+                    "category_id": 1, # 'person' category
                     "keypoints": keypoints_with_confidence.flatten().tolist(),
-                    "score": 1.0
+                    "score": 1.0 # Model doesn't predict confidence, so use 1.0
                 }
                 results.append(result)
 
@@ -258,7 +251,7 @@ def evaluate(model, dataloader, device, coco_gt):
     coco_eval.accumulate()
     coco_eval.summarize()
     
-    ap = coco_eval.stats[0]
+    ap = coco_eval.stats[0] # AP @ OKS=0.50:0.95
     os.remove(res_file)
     
     return ap
@@ -268,10 +261,10 @@ def main():
     # --- Configuration ---
     # !!! IMPORTANT !!!
     # UPDATE THESE PATHS TO YOUR COCO DATASET LOCATION
-    TRAIN_IMG_DIR = '/work/vba875/coco/images/train2017'
-    TRAIN_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_train2017.json'
-    VAL_IMG_DIR = '/work/vba875/coco/images/val2017'
-    VAL_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_val2017.json'
+    TRAIN_IMG_DIR = '/path/to/your/coco/images/train2017'
+    TRAIN_ANN_FILE = '/path/to/your/coco/annotations/person_keypoints_train2017.json'
+    VAL_IMG_DIR = '/path/to/your/coco/images/val2017'
+    VAL_ANN_FILE = '/path/to/your/coco/annotations/person_keypoints_val2017.json'
     
     if not os.path.exists(TRAIN_IMG_DIR) or not os.path.exists(VAL_IMG_DIR):
         print("="*50)
@@ -288,7 +281,6 @@ def main():
     print(f"Using device: {device}")
 
     # --- Data Loading ---
-    # FIX: Resize is now handled inside the dataset class.
     data_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -296,15 +288,15 @@ def main():
 
     print("Loading training data...")
     train_dataset = CocoPoseDataset(root_dir=TRAIN_IMG_DIR, annotation_file=TRAIN_ANN_FILE, transform=data_transform)
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
+    # *** FIX: Use the custom collate function ***
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, collate_fn=custom_collate_fn)
     
     print("Loading validation data...")
     val_dataset = CocoPoseDataset(root_dir=VAL_IMG_DIR, annotation_file=VAL_ANN_FILE, transform=data_transform)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True, collate_fn=custom_collate_fn)
     
     # --- Model Setup ---
     model = DeepPose(num_keypoints=17).to(device)
-    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     
     # --- Training Loop ---
@@ -313,7 +305,7 @@ def main():
 
     for epoch in range(NUM_EPOCHS):
         print(f"\n--- Epoch {epoch+1}/{NUM_EPOCHS} ---")
-        avg_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        avg_loss = train_one_epoch(model, train_loader, optimizer, device)
         print(f"Epoch {epoch+1} Average Training Loss: {avg_loss:.4f}")
         
         print("Evaluating on validation set...")
