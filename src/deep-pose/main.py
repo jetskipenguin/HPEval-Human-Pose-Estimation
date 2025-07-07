@@ -1,6 +1,6 @@
 # DeepPose Implementation for Human Pose Estimation on MS COCO
 # This script provides a complete pipeline:
-# 1. A DeepPose model using a ResNet backbone.
+# 1. A DeepPose model using a ResNet-50 backbone.
 # 2. A custom PyTorch Dataset for MS COCO.
 # 3. A training loop.
 # 4. An evaluation function to compute Average Precision (AP) using pycocotools.
@@ -35,6 +35,7 @@ class DeepPose(nn.Module):
         """
         super(DeepPose, self).__init__()
         
+        # Load a pre-trained ResNet-50 model
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         
         # We use all layers of ResNet except for the final classification layer (fc)
@@ -63,16 +64,18 @@ class CocoPoseDataset(Dataset):
     """
     Custom PyTorch Dataset for the MS COCO Keypoints dataset.
     """
-    def __init__(self, root_dir, annotation_file, transform=None):
+    def __init__(self, root_dir, annotation_file, transform=None, target_size=224):
         """
         Args:
             root_dir (string): Directory with all the images.
             annotation_file (string): Path to the COCO annotation file.
             transform (callable, optional): Optional transform to be applied on a sample.
+            target_size (int): The size of the final square image.
         """
         self.root_dir = root_dir
         self.coco = COCO(annotation_file)
         self.transform = transform
+        self.target_size = target_size
         
         # Filter for images that contain people with keypoints
         self.ids = self._get_image_ids()
@@ -87,7 +90,6 @@ class CocoPoseDataset(Dataset):
             ann_ids = self.coco.getAnnIds(imgIds=img_id, catIds=cat_ids, iscrowd=False)
             if ann_ids:
                 anns = self.coco.loadAnns(ann_ids)
-                # Check if any annotation has a non-zero number of keypoints
                 if any(ann['num_keypoints'] > 0 for ann in anns):
                     ids.append(img_id)
         return ids
@@ -98,21 +100,18 @@ class CocoPoseDataset(Dataset):
     def __getitem__(self, idx):
         """
         Retrieves an image and its corresponding keypoint annotations.
+        Handles resizing and padding to preserve aspect ratio.
         """
         img_id = self.ids[idx]
         img_info = self.coco.loadImgs(img_id)[0]
         img_path = os.path.join(self.root_dir, img_info['file_name'])
         
-        # Load image
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        # Load annotations
         ann_ids = self.coco.getAnnIds(imgIds=img_id, catIds=self.coco.getCatIds(catNms=['person']))
         anns = self.coco.loadAnns(ann_ids)
         
-        # We'll use the annotation for the largest person in the image
-        # This is a simplification for DeepPose which typically handles one person.
         largest_person_ann = None
         max_area = 0
         for ann in anns:
@@ -123,13 +122,9 @@ class CocoPoseDataset(Dataset):
         if largest_person_ann is None:
             return self.__getitem__((idx + 1) % len(self))
             
-        keypoints = np.array(largest_person_ann['keypoints']).reshape(-1, 3)
-        
-        # Get bounding box to crop the person
         bbox = largest_person_ann['bbox']
         x, y, w, h = [int(v) for v in bbox]
         
-        # Crop the image around the person
         padding = 30
         x1 = max(0, x - padding)
         y1 = max(0, y - padding)
@@ -137,20 +132,41 @@ class CocoPoseDataset(Dataset):
         y2 = min(image.shape[0], y + h + padding)
         
         cropped_image = image[y1:y2, x1:x2]
-        
-        # Adjust keypoints to be relative to the cropped image
-        keypoints[:, 0] -= x1
-        keypoints[:, 1] -= y1
-        
-        # Normalize keypoints
         crop_h, crop_w, _ = cropped_image.shape
-        keypoints_normalized = keypoints.copy().astype(np.float32)
-        keypoints_normalized[:, 0] /= crop_w
-        keypoints_normalized[:, 1] /= crop_h
         
-        keypoints_final = keypoints_normalized[:, :2].flatten()
+        scale = self.target_size / max(crop_h, crop_w)
+        new_w, new_h = int(crop_w * scale), int(crop_h * scale)
+        pad_x, pad_y = (self.target_size - new_w) // 2, (self.target_size - new_h) // 2
+
+        resized_image = cv2.resize(cropped_image, (new_w, new_h))
+        padded_image = np.zeros((self.target_size, self.target_size, 3), dtype=np.uint8)
+        padded_image[pad_y:pad_y+new_h, pad_x:pad_x+new_w] = resized_image
+
+        keypoints = np.array(largest_person_ann['keypoints']).reshape(-1, 3)
         
-        sample = {'image': cropped_image, 'keypoints': keypoints_final, 'meta': {'img_id': img_id, 'ann_id': largest_person_ann['id'], 'crop_box': [x1, y1, x2, y2], 'crop_dims': [crop_w, crop_h]}}
+        # Adjust keypoints for the crop, resize, and padding
+        keypoints_transformed = np.zeros_like(keypoints, dtype=np.float32)
+        keypoints_transformed[:, 0] = (keypoints[:, 0] - x1) * scale + pad_x
+        keypoints_transformed[:, 1] = (keypoints[:, 1] - y1) * scale + pad_y
+        
+        # Normalize keypoints to be in the range [0, 1]
+        keypoints_transformed[:, 0] /= self.target_size
+        keypoints_transformed[:, 1] /= self.target_size
+        
+        keypoints_final = keypoints_transformed[:, :2].flatten()
+        
+        sample = {
+            'image': padded_image, 
+            'keypoints': keypoints_final, 
+            'meta': {
+                'img_id': img_id, 
+                'ann_id': largest_person_ann['id'],
+                'crop_box': [x1, y1, x2, y2],
+                'crop_dims': [crop_w, crop_h],
+                'scale': scale,
+                'pad': [pad_x, pad_y]
+            }
+        }
         
         if self.transform:
             sample['image'] = self.transform(sample['image'])
@@ -159,14 +175,11 @@ class CocoPoseDataset(Dataset):
 
 
 def train_one_epoch(model, dataloader, optimizer, criterion, device):
-    """
-    Trains the model for one epoch.
-    """
     model.train()
     running_loss = 0.0
     for i, batch in enumerate(dataloader):
         images = batch['image'].to(device)
-        keypoints = batch['keypoints'].to(device)
+        keypoints = batch['keypoints'].to(device).float()
         
         optimizer.zero_grad()
         outputs = model(images)
@@ -181,13 +194,10 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
 
     return running_loss / len(dataloader)
 
-
 def evaluate(model, dataloader, device, coco_gt):
-    """
-    Evaluates the model on the validation set and computes AP.
-    """
     model.eval()
     results = []
+    target_size = dataloader.dataset.target_size
     
     with torch.no_grad():
         for batch in dataloader:
@@ -200,13 +210,27 @@ def evaluate(model, dataloader, device, coco_gt):
             for i in range(outputs.shape[0]):
                 pred_keypoints = outputs[i].reshape(-1, 2)
                 
-                crop_w = metas['crop_dims'][0][i].item()
-                crop_h = metas['crop_dims'][1][i].item()
+                scale = metas['scale'][i].item()
+                pad_x = metas['pad'][0][i].item()
+                pad_y = metas['pad'][1][i].item()
                 crop_x1 = metas['crop_box'][0][i].item()
                 crop_y1 = metas['crop_box'][1][i].item()
 
-                pred_keypoints[:, 0] = pred_keypoints[:, 0] * crop_w + crop_x1
-                pred_keypoints[:, 1] = pred_keypoints[:, 1] * crop_h + crop_y1
+                # 1. Reverse normalization (from [0,1] to target_size space)
+                pred_keypoints[:, 0] *= target_size
+                pred_keypoints[:, 1] *= target_size
+                
+                # 2. Reverse padding
+                pred_keypoints[:, 0] -= pad_x
+                pred_keypoints[:, 1] -= pad_y
+                
+                # 3. Reverse scaling
+                pred_keypoints[:, 0] /= scale
+                pred_keypoints[:, 1] /= scale
+                
+                # 4. Add original crop offset
+                pred_keypoints[:, 0] += crop_x1
+                pred_keypoints[:, 1] += crop_y1
                 
                 keypoints_with_confidence = np.ones((17, 3))
                 keypoints_with_confidence[:, :2] = pred_keypoints
@@ -249,7 +273,6 @@ def main():
     VAL_IMG_DIR = '/work/vba875/coco/images/val2017'
     VAL_ANN_FILE = '/work/vba875/coco/annotations/person_keypoints_val2017.json'
     
-    # Check if paths exist
     if not os.path.exists(TRAIN_IMG_DIR) or not os.path.exists(VAL_IMG_DIR):
         print("="*50)
         print("!!! ERROR: Dataset paths not found. !!!")
@@ -257,19 +280,17 @@ def main():
         print("="*50)
         return
 
-    # Hyperparameters
     NUM_EPOCHS = 20
     BATCH_SIZE = 32
     LEARNING_RATE = 1e-4
     
-    # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # --- Data Loading ---
+    # FIX: Resize is now handled inside the dataset class.
     data_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Resize((224, 224), antialias=True),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
@@ -306,7 +327,6 @@ def main():
 
     print("\n--- Training Finished ---")
     print(f"Best Validation AP: {best_ap:.4f}")
-
 
 if __name__ == '__main__':
     main()
