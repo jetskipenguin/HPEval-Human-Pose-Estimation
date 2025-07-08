@@ -22,4 +22,4 @@ conda activate deep-pose
 # Go to the DEKR repo
 cd /work/vba875/HPEval-Human-Pose-Estimation
 
-python src/deep-pose/main.py
+python src/deep_pose/main.py --config_file config.ini
