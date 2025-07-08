@@ -34,7 +34,6 @@ class CocoPoseDataset(Dataset):
         self.transform = transform
         self.target_size = target_size
         
-        # *** FIX: Create a list of all valid annotations (one per person) ***
         self.ann_ids = self._get_ann_ids()
 
     def _get_ann_ids(self):
@@ -66,7 +65,6 @@ class CocoPoseDataset(Dataset):
         bbox = ann['bbox']
         x, y, w, h = [int(v) for v in bbox]
         
-        # --- Cropping and Resizing ---
         padding = 30
         x1 = max(0, x - padding)
         y1 = max(0, y - padding)
@@ -88,7 +86,6 @@ class CocoPoseDataset(Dataset):
         keypoints = np.array(ann['keypoints']).reshape(-1, 3)
         keypoints_transformed = np.zeros_like(keypoints, dtype=np.float32)
         
-        # *** FIX: Process keypoints and visibility flags correctly ***
         visible_keypoints_mask = keypoints[:, 2] > 0
         
         # Adjust keypoints for crop, resize, and padding
@@ -101,7 +98,6 @@ class CocoPoseDataset(Dataset):
         # Store visibility
         visibility = keypoints[:, 2] 
         
-        # *** FIX: Regress to pixel coordinates, not normalized values ***
         keypoints_final = keypoints_transformed[:, :2].flatten()
         
         sample = {
@@ -133,14 +129,12 @@ def keypoint_loss(outputs, targets, visibility):
     visibility = visibility.view(-1, 17)
     
     for i in range(outputs.size(0)): # Iterate over batch
-        # *** FIX: Only compute loss for visible keypoints (v=1 or v=2) ***
         vis_mask = visibility[i] > 0
         if vis_mask.sum() > 0:
             loss += nn.functional.mse_loss(outputs[i][vis_mask], targets[i][vis_mask])
             
     return loss / outputs.size(0)
 
-# *** FIX: Custom collate function to handle metadata ***
 def custom_collate_fn(batch):
     # Separate metadata from tensor data
     meta_batch = [item.pop('meta') for item in batch]
@@ -159,7 +153,6 @@ def train_one_epoch(model, dataloader, optimizer, device):
         
         optimizer.zero_grad()
         outputs = model(images)
-        # *** FIX: Use custom loss function ***
         loss = keypoint_loss(outputs, keypoints, visibility)
         if loss == 0: continue # Skip batches with no visible keypoints
         
@@ -181,7 +174,6 @@ def evaluate(model, dataloader, device, coco_gt):
     with torch.no_grad():
         for batch in dataloader:
             images = batch['image'].to(device)
-            # *** FIX: Access meta correctly from the custom collate function output ***
             metas = batch['meta'] 
             
             outputs = model(images)
@@ -196,7 +188,6 @@ def evaluate(model, dataloader, device, coco_gt):
                 pad_x, pad_y = meta['pad']
                 crop_x1, crop_y1, _, _ = meta['crop_box']
 
-                # --- Reverse Transformations ---
                 # 1. Reverse padding
                 pred_keypoints[:, 0] -= pad_x
                 pred_keypoints[:, 1] -= pad_y
@@ -251,7 +242,6 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # --- Data Loading ---
     data_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -259,18 +249,15 @@ def main():
 
     print("Loading training data...")
     train_dataset = CocoPoseDataset(root_dir=TRAIN_IMG_DIR, annotation_file=TRAIN_ANN_FILE, transform=data_transform)
-    # *** FIX: Use the custom collate function ***
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, collate_fn=custom_collate_fn)
     
     print("Loading validation data...")
     val_dataset = CocoPoseDataset(root_dir=VAL_IMG_DIR, annotation_file=VAL_ANN_FILE, transform=data_transform)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True, collate_fn=custom_collate_fn)
     
-    # --- Model Setup ---
     model = DeepPose(num_keypoints=17).to(device)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     
-    # --- Training Loop ---
     best_ap = 0.0
     coco_gt = COCO(VAL_ANN_FILE)
 
