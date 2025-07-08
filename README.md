@@ -5,7 +5,7 @@ In this project we will implement/evaluate different approaches to human pose es
 
 ## DeepPose
 
-Requires linux for `pycocoutils` library
+Requires linux for `pycocoutils` library <br>
 Implementation based on https://arxiv.org/abs/1312.4659
 
 ### Training
@@ -23,3 +23,9 @@ Use the following command
 ```
 python src/deep_pose/visualize.py --image_path <path to your image> --model_path <path to model outputted by training step>
 ```
+### References
+Below is a list of websites referenced for this implementation:
+- https://machinelearningspace.com/coco-dataset-a-step-by-step-guide-to-loading-and-visualizing/
+- https://sebastianraschka.com/faq/docs/training-loop-in-pytorch.html
+- https://github.com/mitmul/deeppose?utm_source=catalyzex.com
+- https://towardsdatascience.com/how-to-work-with-object-detection-datasets-in-coco-format-9bf4fb5848a4/
