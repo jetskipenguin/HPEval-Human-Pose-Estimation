@@ -341,7 +341,12 @@ def main():
         if current_ap > best_ap:
             best_ap = current_ap
             print(f"New best model found! Saving to ")
-            torch.save(model.state_dict(), f"{OUTPUT_FILE_NAME}.pth")
+            torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_ap': best_ap,
+                }, f"{OUTPUT_FILE_NAME}.pth")
 
     print(f"\n--- Training Finished --- Best Validation AP: {best_ap:.4f}")
 
