@@ -334,7 +334,7 @@ def main():
         print(f"Epoch {epoch+1} Validation AP: {current_ap:.4f}")
 
         with open(AP_RECORD_FILE, "a") as f:
-            f.write(float(current_ap) + "\n")
+            f.write(str(current_ap) + "\n")
         
         if current_ap > best_ap:
             best_ap = current_ap
