@@ -33,7 +33,7 @@ Run this command from the project root directory:
 python -m src.heatmap_regression.main.py --config_path config.ini
 ```
 
-### Visualization
+## Visualization
 Once training is complete, you can run the model on images and visualize where the model thinks the joints are.
 Use the following command
 ```
