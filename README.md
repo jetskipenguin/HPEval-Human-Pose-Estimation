@@ -16,14 +16,14 @@ Implementation based on https://arxiv.org/abs/1312.4659
 3. Install needed python dependencies via `python -m pip install -r requirements.txt` (We used python3.8)
 4. From base of project directory run the following command
 ```
-python src/deep_pose/main.py --config_file config.ini
+python -m src.deep_pose.main.py --config_file config.ini
 ```
 
 ### Visualization
 Once training is complete, you can run the model on images and visualize where the model thinks the joints are.
 Use the following command
 ```
-python src/deep_pose/visualize.py --image_path <path to your image> --model_path <path to model outputted by training step>
+python -m src.deep_pose.visualize.py --image_path <path to your image> --model_path <path to model outputted by training step>
 ```
 ### References
 Below is a list of websites referenced for this implementation:

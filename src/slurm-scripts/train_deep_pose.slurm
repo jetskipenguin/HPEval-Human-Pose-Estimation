@@ -19,7 +19,6 @@ module load cuda11/cudnn/9.2.0.82
 
 conda activate deep-pose
 
-# Go to the DEKR repo
 cd /work/vba875/HPEval-Human-Pose-Estimation
 
-python src/deep_pose/main.py --config_file config.ini
+python -m src.deep_pose.main --config_file config.ini

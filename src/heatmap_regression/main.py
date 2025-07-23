@@ -6,10 +6,6 @@
 # 4. An evaluation function that finds the coordinates from heatmaps for AP calculation.
 # 5. A visualization function to draw the final pose.
 
-# ==============================================================================
-# 0. SETUP AND IMPORTS
-# ==============================================================================
-import configparser
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,8 +19,7 @@ import cv2
 import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-import matplotlib.pyplot as plt
-import argparse
+from ..configuration.config import get_configuration
 
 # ==============================================================================
 # 1. MODEL DEFINITION (Heatmap Prediction)
@@ -275,31 +270,6 @@ def evaluate(model, dataloader, device, coco_gt):
     
     return ap
 
-def get_configuration():
-    parser = argparse.ArgumentParser(description="Resnet DeepPose Training")
-    parser.add_argument('--config_path', type=str, required=True,
-                        help="Path to the .ini file with file path configurations")
-    args = parser.parse_args()
-    
-    config = configparser.ConfigParser()
-    config.read(args.config_path)
-
-    required_config_params = ['train_img_dir', 'train_ann_file', 'val_img_dir', 'val_ann_file']
-    for param in required_config_params:
-        if param not in config.options("DeepPose"):
-            print("ERROR: One or more required config options not present in config file")
-            print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set")
-            exit(1)
-
-    for param in required_config_params:
-        if not os.path.exists(config.get("DeepPose", param)):
-            print("ERROR: Dataset path not found")
-            print("Ensure TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE are set to the correct directories in the config file")
-            exit(1)
-    
-    return config.get("DeepPose", required_config_params[0]), config.get("DeepPose", required_config_params[1]), \
-        config.get("DeepPose", required_config_params[2]), config.get("DeepPose", required_config_params[3])
-
 # ==============================================================================
 # 5. MAIN EXECUTION BLOCK
 # ==============================================================================
@@ -347,8 +317,8 @@ def main():
         
         if current_ap > best_ap:
             best_ap = current_ap
-            print(f"New best model found! Saving to '{args.model_path}'")
-            torch.save(model.state_dict(), args.model_path)
+            print(f"New best model found! Saving to ")
+            torch.save(model.state_dict(), "heatmap_regression_best.pth")
 
     print(f"\n--- Training Finished --- Best Validation AP: {best_ap:.4f}")
 

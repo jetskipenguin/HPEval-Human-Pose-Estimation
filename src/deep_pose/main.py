@@ -12,7 +12,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from torchvision import transforms
-from configuration.config import get_configuration
+from ..configuration.config import get_configuration
 
 import os
 import json
@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-from model.DeepPose import DeepPose
+from .model.DeepPose import DeepPose
 
 
 class CocoPoseDataset(Dataset):
