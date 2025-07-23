@@ -192,20 +192,29 @@ def train_one_epoch(model, dataloader, optimizer, device):
 
 def get_coords_from_heatmaps(heatmaps, stride):
     """
-    Decodes heatmaps to get (x, y) coordinates.
-    Args:
-        heatmaps (np.ndarray): A (num_keypoints, H, W) array of heatmaps.
-        stride (float): The stride of the model (input_size / heatmap_size).
-    Returns:
-        np.ndarray: A (num_keypoints, 2) array of coordinates.
+    Decodes heatmaps to get (x, y) coordinates with sub-pixel precision.
+    This is a crucial step to improve accuracy beyond simple argmax.
     """
     num_keypoints, h, w = heatmaps.shape
     coords = np.zeros((num_keypoints, 2), dtype=np.float32)
     
     for i in range(num_keypoints):
         heatmap = heatmaps[i]
+        
+        # Find the coordinates of the maximum value
+        max_val = np.max(heatmap)
+        if max_val == 0:
+            continue
+            
         y, x = np.unravel_index(np.argmax(heatmap), (h, w))
-        # A small offset is often added for better precision, but argmax is a good start.
+        
+        if 1 < x < w - 1 and 1 < y < h - 1:
+            dx = heatmap[y, x + 1] - heatmap[y, x - 1]
+            dy = heatmap[y + 1, x] - heatmap[y - 1, x]
+            # Shift the coordinate by a quarter pixel in the direction of the gradient
+            x += 0.25 * np.sign(dx)
+            y += 0.25 * np.sign(dy)
+        
         coords[i, 0] = x * stride
         coords[i, 1] = y * stride
         
