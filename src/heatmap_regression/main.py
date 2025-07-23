@@ -260,7 +260,7 @@ def evaluate(model, dataloader, device, coco_gt):
                     "image_id": metas['img_id'][i].item(),
                     "category_id": 1,
                     "keypoints": keypoints_with_confidence.flatten().tolist(),
-                    "score": pred_confidences.mean() # Use average keypoint confidence as person score
+                    "score": float(pred_confidences.mean()) # Use average keypoint confidence as person score
                 }
                 # --- END FIX ---
                 results.append(result)
