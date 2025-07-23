@@ -21,4 +21,4 @@ conda activate deep-pose
 
 cd /work/vba875/HPEval-Human-Pose-Estimation
 
-python -m src.heatmap_regression.main --config_file config.ini
+python -m src.heatmap_regression.main --config_path config.ini
