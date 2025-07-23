@@ -3,6 +3,11 @@ Group project for UTSA Artificial Intelligence graduate class
 
 In this project we will implement/evaluate different approaches to human pose estimation.
 
+## Environment Setup
+1. Download COCO 2017 Val and Train datasets (https://cocodataset.org/#download)
+2. Update config.ini to point to the appropriate unzipped directories
+3. Install needed python dependencies via `python -m pip install -r requirements.txt` (We used python3.8)
+
 ## DeepPose
 
 Single person direct regression trained and evaluated on MS COCO dataset.
@@ -11,12 +16,21 @@ Requires linux for `pycocoutils` library <br>
 Implementation based on https://arxiv.org/abs/1312.4659
 
 ### Training
-1. Download COCO 2017 Val and Train datasets (https://cocodataset.org/#download)
-2. Update config.ini to point to the appropriate unzipped directories
-3. Install needed python dependencies via `python -m pip install -r requirements.txt` (We used python3.8)
-4. From base of project directory run the following command
+Run this command from the project root directory:
 ```
-python -m src.deep_pose.main.py --config_file config.ini
+python -m src.deep_pose.main.py --config_path config.ini
+```
+
+## Heatmap Regression
+
+Single person heatmap based regression trained and evaluated on MS COCO dataset.
+Requires linux for `pycocoutils` library <br>
+Implementation based on https://arxiv.org/abs/1804.06208
+
+### Training
+Run this command from the project root directory:
+```
+python -m src.heatmap_regression.main.py --config_path config.ini
 ```
 
 ### Visualization
