@@ -192,33 +192,35 @@ def train_one_epoch(model, dataloader, optimizer, device):
 
 def get_coords_from_heatmaps(heatmaps, stride):
     """
-    Decodes heatmaps to get (x, y) coordinates with sub-pixel precision.
-    This is a crucial step to improve accuracy beyond simple argmax.
+    Decodes heatmaps to get (x, y) coordinates and confidence scores.
+    Uses a quarter-pixel offset refinement for better accuracy.
     """
     num_keypoints, h, w = heatmaps.shape
     coords = np.zeros((num_keypoints, 2), dtype=np.float32)
+    confidences = np.zeros((num_keypoints,), dtype=np.float32)
     
     for i in range(num_keypoints):
         heatmap = heatmaps[i]
+        max_val = np.max(heatmap)
+        confidences[i] = max_val
         
         # Find the coordinates of the maximum value
-        max_val = np.max(heatmap)
-        if max_val == 0:
-            continue
-            
         y, x = np.unravel_index(np.argmax(heatmap), (h, w))
         
+        # --- FIX: Add quarter-pixel offset for refinement ---
+        # Check the values of the neighbors of the max pixel
         if 1 < x < w - 1 and 1 < y < h - 1:
-            dx = heatmap[y, x + 1] - heatmap[y, x - 1]
-            dy = heatmap[y + 1, x] - heatmap[y - 1, x]
-            # Shift the coordinate by a quarter pixel in the direction of the gradient
-            x += 0.25 * np.sign(dx)
-            y += 0.25 * np.sign(dy)
+            diff_x = heatmap[y, x+1] - heatmap[y, x-1]
+            diff_y = heatmap[y+1, x] - heatmap[y-1, x]
+            # Shift the coordinate by 0.25 pixels in the direction of the gradient
+            x += 0.25 * np.sign(diff_x)
+            y += 0.25 * np.sign(diff_y)
+        # --- END FIX ---
         
         coords[i, 0] = x * stride
         coords[i, 1] = y * stride
         
-    return coords
+    return coords, confidences
 
 def evaluate(model, dataloader, device, coco_gt):
     model.eval()
@@ -236,10 +238,9 @@ def evaluate(model, dataloader, device, coco_gt):
             for i in range(outputs.shape[0]):
                 pred_heatmaps = outputs[i]
                 
-                # Decode heatmaps to coordinates in the padded image space
-                pred_coords_padded = get_coords_from_heatmaps(pred_heatmaps, stride)
+                # --- FIX: Get both coordinates and confidence scores ---
+                pred_coords_padded, pred_confidences = get_coords_from_heatmaps(pred_heatmaps, stride)
                 
-                # De-normalize coordinates back to original image space
                 scale = metas['scale'][i].item()
                 pad_x = metas['pad'][0][i].item()
                 pad_y = metas['pad'][1][i].item()
@@ -250,15 +251,18 @@ def evaluate(model, dataloader, device, coco_gt):
                 pred_coords_original[:, 0] = (pred_coords_padded[:, 0] - pad_x) / scale + crop_x1
                 pred_coords_original[:, 1] = (pred_coords_padded[:, 1] - pad_y) / scale + crop_y1
                 
-                keypoints_with_confidence = np.ones((17, 3))
+                # --- FIX: Populate results with confidence scores ---
+                keypoints_with_confidence = np.zeros((17, 3))
                 keypoints_with_confidence[:, :2] = pred_coords_original
+                keypoints_with_confidence[:, 2] = pred_confidences
                 
                 result = {
                     "image_id": metas['img_id'][i].item(),
                     "category_id": 1,
                     "keypoints": keypoints_with_confidence.flatten().tolist(),
-                    "score": 1.0
+                    "score": pred_confidences.mean() # Use average keypoint confidence as person score
                 }
+                # --- END FIX ---
                 results.append(result)
 
     if not results:
@@ -292,8 +296,8 @@ def main():
         print("ERROR: Dataset paths not found. Please update paths in main().")
         return
 
-    NUM_EPOCHS = 50 # Heatmap models may benefit from more epochs
-    BATCH_SIZE = 32
+    NUM_EPOCHS = 90 # Heatmap models may benefit from more epochs
+    BATCH_SIZE = 128
     LEARNING_RATE = 1e-4
     
     data_transform = transforms.Compose([
