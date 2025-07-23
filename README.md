@@ -5,6 +5,8 @@ In this project we will implement/evaluate different approaches to human pose es
 
 ## DeepPose
 
+Single person direct regression trained and evaluated on MS COCO dataset.
+
 Requires linux for `pycocoutils` library <br>
 Implementation based on https://arxiv.org/abs/1312.4659
 
