@@ -235,9 +235,11 @@ def evaluate(model, dataloader, device, coco_gt):
 def main():
     TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE = get_configuration()
 
-    NUM_EPOCHS = 20
-    BATCH_SIZE = 32
-    LEARNING_RATE = 1e-4
+    NUM_EPOCHS = 90
+    BATCH_SIZE = 128
+    LEARNING_RATE = 1e-5
+    OUTPUT_FILE_NAME = "deeppose_best"
+    AP_RECORD_FILE = f"{OUTPUT_FILE_NAME}.csv"
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -261,6 +263,9 @@ def main():
     best_ap = 0.0
     coco_gt = COCO(VAL_ANN_FILE)
 
+    if AP_RECORD_FILE in os.listdir():
+        raise ValueError(f"{AP_RECORD_FILE} already present in current working directory")
+
     for epoch in range(NUM_EPOCHS):
         print(f"\n--- Epoch {epoch+1}/{NUM_EPOCHS} ---")
         avg_loss = train_one_epoch(model, train_loader, optimizer, device)
@@ -269,11 +274,13 @@ def main():
         print("Evaluating on validation set...")
         current_ap = evaluate(model, val_loader, device, coco_gt)
         print(f"Epoch {epoch+1} Validation AP: {current_ap:.4f}")
+        with open(AP_RECORD_FILE, "a") as f:
+            f.write(float(current_ap) + "\n")
         
         if current_ap > best_ap:
             best_ap = current_ap
-            print(f"New best model found! Saving to 'deeppose_best.pth'")
-            torch.save(model.state_dict(), "deeppose_best.pth")
+            print(f"New best model found! Saving to {OUTPUT_FILE_NAME}")
+            torch.save(model.state_dict(), f"{OUTPUT_FILE_NAME}.pth")
 
     print("\n--- Training Finished ---")
     print(f"Best Validation AP: {best_ap:.4f}")
