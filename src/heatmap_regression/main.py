@@ -179,7 +179,7 @@ def train_one_epoch(model, dataloader, optimizer, device):
         heatmaps = batch['heatmaps'].to(device)
         
         optimizer.zero_grad()
-        outputs = model(images)
+        outputs, _ = model(images)
         loss = criterion(outputs, heatmaps)
         loss.backward()
         optimizer.step()
