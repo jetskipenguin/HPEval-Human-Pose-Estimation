@@ -37,25 +37,31 @@ class HeatmapPoseModel(nn.Module):
         # Use the ResNet backbone up to the last convolutional block
         self.backbone = nn.Sequential(*list(resnet.children())[:-2])
         
-        # Define the deconvolutional head to upsample feature maps to heatmaps
-        self.deconv_head = nn.Sequential(
+        self.deconv1 = nn.Sequential(
             nn.ConvTranspose2d(2048, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(256, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(256, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            # Final layer to produce the heatmaps
-            nn.Conv2d(256, num_keypoints, kernel_size=1, stride=1, padding=0)
         )
+        self.deconv2 = nn.Sequential(
+            nn.ConvTranspose2d(256, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+        )
+        self.deconv3 = nn.Sequential(
+            nn.ConvTranspose2d(256, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+        )
+        self.final_layer = nn.Conv2d(256, num_keypoints, kernel_size=1)
+
 
     def forward(self, x):
         x = self.backbone(x)
-        x = self.deconv_head(x)
-        return x
+        x1 = self.deconv1(x)   # First stage
+        x2 = self.deconv2(x1)  # Second stage
+        x3 = self.deconv3(x2)  # Third stage
+        final = self.final_layer(x3)
+        return final, [x1, x2, x3]
 
 # ==============================================================================
 # 2. COCO DATASET LOADER (Generates Heatmaps)
@@ -64,7 +70,7 @@ class CocoHeatmapDataset(Dataset):
     """
     Custom PyTorch Dataset for MS COCO that generates ground-truth heatmaps.
     """
-    def __init__(self, root_dir, annotation_file, transform=None, input_size=224, heatmap_size=56):
+    def __init__(self, root_dir, annotation_file, transform=None, input_size=256, heatmap_size=64):
         self.root_dir = root_dir
         self.coco = COCO(annotation_file)
         self.transform = transform
@@ -133,21 +139,16 @@ class CocoHeatmapDataset(Dataset):
         
         for i in range(keypoints.shape[0]):
             if keypoints[i, 2] > 0: # If keypoint is visible
-                # Transform keypoint to padded image space
-                kp_x = ((keypoints[i, 0] - x1) * scale + pad_x)
-                kp_y = ((keypoints[i, 1] - y1) * scale + pad_y)
-                
-                # Transform to heatmap space
-                heatmap_x = int(kp_x / self.stride)
-                heatmap_y = int(kp_y / self.stride)
+                mu_x = (keypoints[i, 0] - x1) * scale + pad_x
+                mu_y = (keypoints[i, 1] - y1) * scale + pad_y
+                mu_x /= self.stride
+                mu_y /= self.stride
 
                 # Generate Gaussian
-                if 0 <= heatmap_x < self.heatmap_size and 0 <= heatmap_y < self.heatmap_size:
-                    # Create a grid of coordinates
+                if 0 <= mu_x < self.heatmap_size and 0 <= mu_y < self.heatmap_size:
                     x_grid, y_grid = np.meshgrid(np.arange(self.heatmap_size), np.arange(self.heatmap_size))
-                    # Gaussian centered at the keypoint
-                    sigma = 2.0
-                    g = np.exp(-((x_grid - heatmap_x)**2 + (y_grid - heatmap_y)**2) / (2 * sigma**2))
+                    sigma = (max(w, h) * scale / self.stride) / 6.0  # adaptive sigma
+                    g = np.exp(-((x_grid - mu_x) ** 2 + (y_grid - mu_y) ** 2) / (2 * (sigma ** 2)))
                     heatmaps[i] = g
 
         sample = {
@@ -179,7 +180,6 @@ def train_one_epoch(model, dataloader, optimizer, device):
         
         optimizer.zero_grad()
         outputs = model(images)
-        outputs = torch.sigmoid(outputs) 
         loss = criterion(outputs, heatmaps)
         loss.backward()
         optimizer.step()
@@ -238,21 +238,20 @@ def evaluate(model, dataloader, device, coco_gt):
             
             for i in range(outputs.shape[0]):
                 pred_heatmaps = outputs[i]
-                
-                # --- FIX: Get both coordinates and confidence scores ---
                 pred_coords_padded, pred_confidences = get_coords_from_heatmaps(pred_heatmaps, stride)
                 
-                scale = metas['scale'][i]  # No .item() needed
-                pad_x = metas['pad'][i][0]  # Direct list access
-                pad_y = metas['pad'][i][1]
-                crop_x1 = metas['crop_box'][i][0]
-                crop_y1 = metas['crop_box'][i][1]
+                # CORRECTED META DATA EXTRACTION
+                scale = metas['scale'][i].item()
+                pad_x = metas['pad'][i][0].item()  # Fixed indexing
+                pad_y = metas['pad'][i][1].item()
+                crop_x1 = metas['crop_box'][i][0].item()
+                crop_y1 = metas['crop_box'][i][1].item()
 
                 pred_coords_original = np.zeros_like(pred_coords_padded)
                 pred_coords_original[:, 0] = (pred_coords_padded[:, 0] - pad_x) / scale + crop_x1
                 pred_coords_original[:, 1] = (pred_coords_padded[:, 1] - pad_y) / scale + crop_y1
                 
-                # --- FIX: Populate results with confidence scores ---
+
                 keypoints_with_confidence = np.zeros((17, 3))
                 keypoints_with_confidence[:, :2] = pred_coords_original
                 keypoints_with_confidence[:, 2] = pred_confidences
@@ -263,7 +262,14 @@ def evaluate(model, dataloader, device, coco_gt):
                     "keypoints": keypoints_with_confidence.flatten().tolist(),
                     "score": float(pred_confidences.mean()) # Use average keypoint confidence as person score
                 }
-                # --- END FIX ---
+
+                visible = keypoints_with_confidence[:, 2] > 0.1
+                if visible.any():
+                    result['score'] = float(pred_confidences[visible].mean())
+                else:
+                    result['score'] = float(pred_confidences.mean())
+
+
                 results.append(result)
 
     if not results:
@@ -298,7 +304,7 @@ def main():
         return
 
     NUM_EPOCHS = 90 # Heatmap models may benefit from more epochs
-    BATCH_SIZE = 128
+    BATCH_SIZE = 32
     LEARNING_RATE = 1e-4
     OUTPUT_FILE_NAME = "heatmap_regression_best"
     AP_RECORD_FILE = f"{OUTPUT_FILE_NAME}.csv"
@@ -324,6 +330,8 @@ def main():
 
     if AP_RECORD_FILE in os.listdir():
         raise ValueError(f"{AP_RECORD_FILE} already present in current working directory")
+    
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
 
     for epoch in range(NUM_EPOCHS):
         print(f"\n--- Epoch {epoch+1}/{NUM_EPOCHS} ---")
@@ -346,6 +354,8 @@ def main():
                     'optimizer_state_dict': optimizer.state_dict(),
                     'best_ap': best_ap,
                 }, f"{OUTPUT_FILE_NAME}.pth")
+        
+        scheduler.step()
 
     print(f"\n--- Training Finished --- Best Validation AP: {best_ap:.4f}")
 
