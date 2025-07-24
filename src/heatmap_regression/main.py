@@ -146,7 +146,7 @@ class CocoHeatmapDataset(Dataset):
                     # Create a grid of coordinates
                     x_grid, y_grid = np.meshgrid(np.arange(self.heatmap_size), np.arange(self.heatmap_size))
                     # Gaussian centered at the keypoint
-                    sigma = 1.0
+                    sigma = 2.0
                     g = np.exp(-((x_grid - heatmap_x)**2 + (y_grid - heatmap_y)**2) / (2 * sigma**2))
                     heatmaps[i] = g
 
@@ -242,11 +242,11 @@ def evaluate(model, dataloader, device, coco_gt):
                 # --- FIX: Get both coordinates and confidence scores ---
                 pred_coords_padded, pred_confidences = get_coords_from_heatmaps(pred_heatmaps, stride)
                 
-                scale = metas['scale'][i].item()
-                pad_x = metas['pad'][0][i].item()
-                pad_y = metas['pad'][1][i].item()
-                crop_x1 = metas['crop_box'][0][i].item()
-                crop_y1 = metas['crop_box'][1][i].item()
+                scale = metas['scale'][i]  # No .item() needed
+                pad_x = metas['pad'][i][0]  # Direct list access
+                pad_y = metas['pad'][i][1]
+                crop_x1 = metas['crop_box'][i][0]
+                crop_y1 = metas['crop_box'][i][1]
 
                 pred_coords_original = np.zeros_like(pred_coords_padded)
                 pred_coords_original[:, 0] = (pred_coords_padded[:, 0] - pad_x) / scale + crop_x1
