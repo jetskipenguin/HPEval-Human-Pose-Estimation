@@ -233,7 +233,7 @@ def evaluate(model, dataloader, device, coco_gt):
             images = batch['image'].to(device)
             metas = batch['meta']
             
-            outputs = model(images)
+            outputs, _ = model(images)
             outputs = outputs.cpu().numpy()
             
             for i in range(outputs.shape[0]):
