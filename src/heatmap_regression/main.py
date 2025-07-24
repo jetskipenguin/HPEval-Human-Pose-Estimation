@@ -240,6 +240,9 @@ def evaluate(model, dataloader, device, coco_gt):
                 pred_heatmaps = outputs[i]
                 pred_coords_padded, pred_confidences = get_coords_from_heatmaps(pred_heatmaps, stride)
                 
+                print(metas)
+                print(metas['scale'])
+                print(metas['pad'])
                 # CORRECTED META DATA EXTRACTION
                 scale = metas['scale'][i].item()
                 pad_x = metas['pad'][i][0].item()  # Fixed indexing
