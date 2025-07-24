@@ -245,10 +245,10 @@ def evaluate(model, dataloader, device, coco_gt):
                 print(metas['pad'])
                 # CORRECTED META DATA EXTRACTION
                 scale = metas['scale'][i].item()
-                pad_x = metas['pad'][i][0].item()  # Fixed indexing
-                pad_y = metas['pad'][i][1].item()
-                crop_x1 = metas['crop_box'][i][0].item()
-                crop_y1 = metas['crop_box'][i][1].item()
+                pad_x = metas['pad'][0][i].item()  # Fixed indexing
+                pad_y = metas['pad'][0][i].item()
+                crop_x1 = metas['crop_box'][0][i].item()
+                crop_y1 = metas['crop_box'][1][i].item()
 
                 pred_coords_original = np.zeros_like(pred_coords_padded)
                 pred_coords_original[:, 0] = (pred_coords_padded[:, 0] - pad_x) / scale + crop_x1
