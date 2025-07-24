@@ -180,7 +180,6 @@ def train_one_epoch(model, dataloader, optimizer, device):
         optimizer.zero_grad()
         outputs = model(images)
         outputs = torch.sigmoid(outputs) 
-        outputs = outputs.cpu().numpy()
         loss = criterion(outputs, heatmaps)
         loss.backward()
         optimizer.step()
