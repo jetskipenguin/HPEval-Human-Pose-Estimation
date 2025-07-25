@@ -233,7 +233,7 @@ def evaluate(model, dataloader, device, coco_gt):
 
 
 def main():
-    TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE = get_configuration()
+    TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE, MODEL_TYPE = get_configuration()
 
     NUM_EPOCHS = 90
     BATCH_SIZE = 128
