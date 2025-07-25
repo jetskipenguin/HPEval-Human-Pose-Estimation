@@ -28,7 +28,7 @@ class CocoPoseDataset(Dataset):
     Custom PyTorch Dataset for the MS COCO Keypoints dataset.
     Generates one sample per person annotation.
     """
-    def __init__(self, root_dir, annotation_file, transform=None, target_size=224):
+    def __init__(self, root_dir, annotation_file, transform=None, target_size=220):
         self.root_dir = root_dir
         self.coco = COCO(annotation_file)
         self.transform = transform
@@ -233,11 +233,11 @@ def evaluate(model, dataloader, device, coco_gt):
 
 
 def main():
-    TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE, MODEL_TYPE = get_configuration()
+    TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE = get_configuration()
 
-    NUM_EPOCHS = 90
-    BATCH_SIZE = 128
-    LEARNING_RATE = 1e-5
+    NUM_EPOCHS = 140
+    BATCH_SIZE = 32
+    LEARNING_RATE = 1e-4
     OUTPUT_FILE_NAME = "deeppose_best"
     AP_RECORD_FILE = f"{OUTPUT_FILE_NAME}.csv"
     
@@ -274,13 +274,19 @@ def main():
         print("Evaluating on validation set...")
         current_ap = evaluate(model, val_loader, device, coco_gt)
         print(f"Epoch {epoch+1} Validation AP: {current_ap:.4f}")
+
         with open(AP_RECORD_FILE, "a") as f:
             f.write(str(current_ap) + "\n")
         
         if current_ap > best_ap:
             best_ap = current_ap
             print(f"New best model found! Saving to {OUTPUT_FILE_NAME}")
-            torch.save(model.state_dict(), f"{OUTPUT_FILE_NAME}.pth")
+            torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_ap': best_ap,
+            }, f"{OUTPUT_FILE_NAME}.pth")
 
     print("\n--- Training Finished ---")
     print(f"Best Validation AP: {best_ap:.4f}")
