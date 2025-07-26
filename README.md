@@ -5,6 +5,9 @@ In this project we will implement/evaluate different approaches to human pose es
 
 Mid Term Presentation: https://docs.google.com/presentation/d/19DLxHmOaemUwD_lI6J0rghSKnJb82Dd2Kmxp5rkALzo/edit?usp=sharing
 
+
+Artifacts from training runs can be found under `results/<approach-name>`
+
 ## Single Person Approaches
 
 ### Direct Regression (DeepPose)
