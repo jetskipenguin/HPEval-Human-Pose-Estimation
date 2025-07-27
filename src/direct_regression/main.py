@@ -235,10 +235,11 @@ def evaluate(model, dataloader, device, coco_gt):
 def main():
     TRAIN_IMG_DIR, TRAIN_ANN_FILE, VAL_IMG_DIR, VAL_ANN_FILE = get_configuration()
 
-    NUM_EPOCHS = 140
+    NUM_EPOCHS = 20
     BATCH_SIZE = 32
     LEARNING_RATE = 1e-4
-    OUTPUT_FILE_NAME = "deeppose_best"
+    OUTPUT_FILE_NAME = "resnet152-batch32-lr1e-4-deep-pose.pth"
+    CHECKPOINT_FILE = f"{OUTPUT_FILE_NAME}.pth"
     AP_RECORD_FILE = f"{OUTPUT_FILE_NAME}.csv"
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -263,8 +264,16 @@ def main():
     best_ap = 0.0
     coco_gt = COCO(VAL_ANN_FILE)
 
-    if AP_RECORD_FILE in os.listdir():
-        raise ValueError(f"{AP_RECORD_FILE} already present in current working directory")
+    if os.path.exists(CHECKPOINT_FILE):
+        print(f"Resuming training from checkpoint: {CHECKPOINT_FILE}")
+        checkpoint = torch.load(CHECKPOINT_FILE, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_ap = checkpoint['best_ap']
+        print(f"Resumed from epoch {start_epoch}. Best AP so far: {best_ap:.4f}")
+    else:
+        print("No checkpoint found. Starting training from scratch.")
 
     for epoch in range(NUM_EPOCHS):
         print(f"\n--- Epoch {epoch+1}/{NUM_EPOCHS} ---")

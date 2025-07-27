@@ -10,7 +10,7 @@ class DeepPose(nn.Module):
     """
     def __init__(self, num_keypoints=17):
         super(DeepPose, self).__init__()
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
         self.backbone = nn.Sequential(*list(resnet.children())[:-1])
         self.fc = nn.Linear(2048, num_keypoints * 2)
 
