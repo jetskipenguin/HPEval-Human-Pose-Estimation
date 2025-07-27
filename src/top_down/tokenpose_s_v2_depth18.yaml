@@ -24,7 +24,7 @@ DATASET:
   TRAIN_SET: 'train2017'
 MODEL:
   INIT_WEIGHTS: true
-  NAME: pose_tokenpose_s_depth18
+  NAME: pose_tokenpose_s
   NUM_JOINTS: 17
   PRETRAINED: ''
   TARGET_TYPE: gaussian
