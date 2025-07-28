@@ -15,7 +15,7 @@ DATASET:
   DATA_FORMAT: jpg
   FLIP: 0.5
   INPUT_SIZE: 512
-  OUTPUT_SIZE: [128, 256]
+  OUTPUT_SIZE: [128, 256, 512]
   MAX_NUM_PEOPLE: 30
   MAX_ROTATION: 30
   MAX_SCALE: 1.5
@@ -34,13 +34,13 @@ DEBUG:
   SAVE_HEATMAPS_PRED: True
   SAVE_TAGMAPS_PRED: True
 LOSS:
-  NUM_STAGES: 2
+  NUM_STAGES: 3
   AE_LOSS_TYPE: exp
-  WITH_AE_LOSS: [True, False]
-  PUSH_LOSS_FACTOR: [0.001, 0.001]
-  PULL_LOSS_FACTOR: [0.001, 0.001]
-  WITH_HEATMAPS_LOSS: [True, True]
-  HEATMAPS_LOSS_FACTOR: [1.0, 1.0]
+  WITH_AE_LOSS: [True, False, False]
+  PUSH_LOSS_FACTOR: [0.001, 0.001, 0.001]
+  PULL_LOSS_FACTOR: [0.001, 0.001, 0.001]
+  WITH_HEATMAPS_LOSS: [True, True, True]
+  HEATMAPS_LOSS_FACTOR: [1.0, 1.0, 1.0]
 MODEL:
   EXTRA:
     FINAL_CONV_KERNEL: 1
@@ -89,10 +89,13 @@ MODEL:
       NUM_DECONVS: 2
       NUM_CHANNELS:
       - 32
+      - 32
       KERNEL_SIZE:
+      - 4
       - 4
       NUM_BASIC_BLOCKS: 4
       CAT_OUTPUT:
+      - True
       - True
   INIT_WEIGHTS: True
   NAME: pose_higher_hrnet
@@ -105,8 +108,8 @@ TEST:
   MODEL_FILE: '' 
   SCALE_FACTOR: [1]
   DETECTION_THRESHOLD: 0.1
-  WITH_HEATMAPS: (True, True)
-  WITH_AE: (True, False)
+  WITH_HEATMAPS: (True, True, True)
+  WITH_AE: (True, False, False)
   PROJECT2IMAGE: True
   NMS_KERNEL: 5
   NMS_PADDING: 2
