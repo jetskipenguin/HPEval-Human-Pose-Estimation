@@ -66,9 +66,16 @@ The source code provided with the paper allows a user to give an input file desc
 
 Please refer to the paper's github repository for further instructions on environment setup and running the code.
 
-## Bottom Up Approach (HigherHRNet)
+### Bottom Up Approach (HigherHRNet)
 Multi person bottom up approach that enhanced HRNet backbone network for improved performance. Trained and evaluated on MS COCO dataset.
 Paper: https://arxiv.org/pdf/1908.10357
 
 We used source code provided with paper to train with new parameters. (https://github.com/HRNet/HigherHRNet-Human-Pose-Estimation/tree/master)
 We've placed config files for our experiments under `src/bottom_up`
+
+### Video Bottom Up Approach (DEKR)
+Multi person bottom up approach that uses adaptive activation and separate regression for improved performance. Trained and evaluated on the CrowdPose dataset.
+Paper: https://arxiv.org/pdf/2104.02300
+
+We used source code provided with the paper. (https://github.com/HRNet/DEKR/tree/main)
+Config files for our training runs are under `src/bottom_up_dekr`
