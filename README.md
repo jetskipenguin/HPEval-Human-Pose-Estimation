@@ -62,6 +62,13 @@ Paper: https://arxiv.org/pdf/2104.03516
 
 We used source code provided with paper to train with new parameters and compare results. (https://github.com/leeyegy/TokenPose?utm_source=catalyzex.com)
 
-The source code provided with the paper allows a user to give an input file describing different training/evaluation parmameters. We've palced our configuration files for our training runs under `src/top_down`.
+The source code provided with the paper allows a user to give an input file describing different training/evaluation parmameters. We've placed our configuration files for our training runs under `src/top_down`.
 
 Please refer to the paper's github repository for further instructions on environment setup and running the code.
+
+## Bottom Up Approach (HigherHRNet)
+Multi person bottom up approach that enhanced HRNet backbone network for improved performance. Trained and evaluated on MS COCO dataset.
+Paper: https://arxiv.org/pdf/1908.10357
+
+We used source code provided with paper to train with new parameters. (https://github.com/HRNet/HigherHRNet-Human-Pose-Estimation/tree/master)
+We've placed config files for our experiments under `src/bottom_up`
