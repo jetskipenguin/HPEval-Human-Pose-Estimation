@@ -19,4 +19,4 @@ conda activate higher-hrnet
 
 cd /work/vba875/HigherHRNet-Human-Pose-Estimation
 
-python tools/train.py --cfg /work/vba875/HPEval-Human-Pose-Estimation/src/bottom_up/w32_512_adam_lr1e-3_0deconvs.yaml
+python tools/dist_train.py --cfg /work/vba875/HPEval-Human-Pose-Estimation/src/bottom_up/w32_512_adam_lr1e-3_0deconvs.yaml

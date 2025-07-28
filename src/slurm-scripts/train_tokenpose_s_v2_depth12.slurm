@@ -17,7 +17,7 @@ module load anaconda3/2024.10-1
 module load cudatoolkit/11.3.1_465.19.01
 module load cuda11/cudnn/9.2.0.82
 
-conda activate token-pose
+conda activate simple-baselines-for-hpe
 
 cd /work/vba875/TokenPose
 
